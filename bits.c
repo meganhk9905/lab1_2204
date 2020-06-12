@@ -194,6 +194,10 @@ int bitAnd(int x, int y) {
  */
 int bitXor(int x, int y) {
     //No two can be the same in xor
+ //if we do n = x&y, from the bit ints x and y, only the 1's will remain through and when we do
+ // the inverse of x and y will leave only the originally 0's as 1's. Therefore, if we inverse i and n, the bits
+ //and do bit wise and, the bits that were both 1 will become 0 and the bits that had different bits will become 1 so 
+ // it has the same functionality and xor
     int n = x & y;
     int i = ~x & ~y;
     int k = ~n & ~i;
@@ -221,7 +225,9 @@ int isZero(int x) {
 int fitsShort(int x) {
     /* 
    * after left shift 16 and right shift 16, the left 16 of x is 00000..00 or 111...1111
-   * so after shift, if x remains the same, then it means that x can be represent as 16-bit
+   * so after shift, if x remains the same, then it means that x can be represent as 16-bit therefore the 
+   xor will create a 0 which will then be converted to 1 by the ! operator. 
+   We are looking to see if the 32 bit x can be represented as a 16 bit integer.
   */
   return !(((x << 16)>>16)^x);
 }
@@ -238,6 +244,12 @@ int fitsShort(int x) {
  *   Rating: 2
  */
 int fitsBits(int x, int n) {
+ //33 +~n can be written as k= 32 +(1+~n) . The (1+~n) is representing the negative value. To create 2's complement
+ //we must inverse the bit integer and add 1. If we shift left then right by k,  if the value is positive, 
+ // the left of the position n will be 0's and otherwise is will be 1's. Therefore, if the original x was
+ //positive, the bit integer will not change after the shift which means that xor will yield a 0 and if we
+ //apply !, it will return 1. This means that we can fit x in n bits as a 2's complement integer. Similarly with 
+ //negative. 
     int k = 33 +~n;
   return !(x^((x<<k)>> k));
 }
@@ -265,10 +277,14 @@ int getByte(int x, int n) {
  *   Rating: 2
  */
 int isNotEqual(int x, int y) {
-    //Xor already returns 0 if the two inputs are equal. Double logical notting
+    //Xor already returns 0 if the two inputs are equal. Double negation
   //keeps this result and compacts all other possibilities to 1.
-    //double negation creates a bool
+  
   return !(!(x^y));
+}
+
+int isequal(int x, int y) {
+return !!(x&y);
 }
 /* 
  * sign - return 1 if positive, 0 if zero, and -1 if negative
@@ -278,8 +294,24 @@ int isNotEqual(int x, int y) {
  *  Max ops: 10
  *  Rating: 2
  */
+
 int sign(int x) {
+ //if x is a negative values, the msb is 1 so if we do an arithmatic right shift 31 times, the 1 will be copied 
+ // in the place of the 32 bits. if x is negative, !!x will be 1 and if we perform or with the 32 bit integer
+ // we will get a 32 bit integer that is full of 1's which will yield a -1. if x is 0, the right shift will 
+ //copy all 0's and !!x will be 0 as well which will return a 0. If x is positive the right shift will yield 0's and 
+ //!!x will be 1 so the or will return 1. 
     return ((!!x) | (x>> 31));
+}
+
+int isNegative(int x) {
+  /*
+   * simply test to see if the leading bit is 0 or 1.
+   */
+
+  // grab the leading bit
+  x = (x >> 31) & 1;
+  return x;
 }
 /* 
  * 3-pt puzzles 
@@ -292,9 +324,14 @@ int sign(int x) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-   int xn = ~x+1;
-   int yn = xn + y; /*negative if x > y*/
-   int sign = yn >> 31 & 1; /*shifts sign bit to the right*/
+ 
+   int xn = ~x+1; //xn is x's negative value
+   int yn = xn + y; /*negative if x > y, yn = y-x*/
+   int sign = yn >> 31 & 1; /*shifts sign bit to the right. If yn is a negative value, the shifted bit 
+   integer will be all 1's if yn is positive, then the integer will be full of 0's. So, if yn is negative, 
+   sign will be -1, nd if yn is positive , the sign will yield 0*/
+ //the next part is to handle the edge cases where x and y have different signs. If x is negative and y is 
+ //positive, then the following will return 1. 
    int left = 1 << 31;
    int xl = left & x;
    int yl = left & y;
@@ -303,6 +340,27 @@ int isLessOrEqual(int x, int y) {
  
    return (xor & (xl>>31)) | (!sign & !xor);
 }
+
+int isLess(int x, int y) {
+  /*
+   *11 ops
+   * diff = x+(~y+1) : x-y
+   * ~y&x : x<0, y>0 return 1
+   * ~y|x : x>0, y<0 return 0
+   * diff|(~x+y+1)) : x=y, x-y and y-x both equals 0, return 0
+   * another way: 
+   * int sx = x >> 31;               //sx is 1111...1 or 0000...0
+   * int sy = y >> 31;               //sy is 1111...1 or 0000...0
+   * int s_flag = sy ^ sx;           //s_flag = 0 when x's and y's significant bits are the same; s_flag = 1 when they are different
+   * return (!(s_flag | (((~x)+ y) >> 31)) + (s_flag  & !(sy)));  //the first part !(s_flag | (((~x)+ y)>>31)) == (!s_flag & !(((~x)+y)>>31)), which is when x and y are '++' or '--'; the second part is when x and y are '+-' or '-+'. 
+   *
+   *
+   */
+  int diff = x+(~y+1);
+  return (((((diff) | (~y&x)) & (~y|x))) >> 31) & 1;
+}
+
+
 /* 
  * logicalShift - shift x to the right by n, using a logical shift
  *   Can assume that 0 <= n <= 31
@@ -312,6 +370,10 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 3 
  */
 int logicalShift(int x, int n) {
+ //logical shift is when the remaining bits become 0's even though the msb is 1. so
+ //if we do right shift by n, if x is a negative number, the right n bits will be filled with 1, 
+ //therefore, we must do a bitwise and with (~(((1<<31)>>n)<<1)) which will mask the n bit 1's into 0's 
+ //like how logical shift would operate. 
   return (x>>n)&(~(((1<<31)>>n)<<1));
 }
 /* 
@@ -323,12 +385,26 @@ int logicalShift(int x, int n) {
  *   Rating: 3 
  */
 int rotateLeft(int x, int n) {
-    int i = ~(~0 << n);
-    int k = 33+~n;
-    k = (x >> k);
-    k = i&k;
-  return k+(x<<n);
+ //
+    int i = ~(~0 << n);//i is the bit integer that has 1's for n bits 
+    int k = 33+~n;//k = 32 -n 
+    k = (x >> k);// k becomes x after shifting k bits
+    k = i&k;// if we do a bitwise and between k and i, the right n bits will be left and the rest will 
+ //turn to 0's
+  return k+(x<<n);// we shift x n bits and add k to finish rotating. 
 
+}
+int rotateRight(int x, int n) { 
+  //shifts x by 32-n positions in order to get n bits to the front of the number.
+ //Creates a mask of tmax and shifts that right by n-1 to create a mask that will remove the 
+ //bits where the new bits will go. shift x by n to move the number over and and with mask to 
+ //leave space for shifted 'rotated' bits. or the two together to get result
+  int movingPart = x << (32 + (~n +1));
+  int tmax = ~(1 << 31);
+  tmax = tmax >> (n+((~1)+1));
+  x = x >> n;
+  x = x & tmax;
+  return x | movingPart;
 }
 /*
  * 4-pt puzzles
@@ -344,6 +420,14 @@ int rotateLeft(int x, int n) {
  *   Rating: 4
  */
 int satAdd(int x, int y) {
+ //add xor x's msb will be 0 if add and x have the same sign, and when the signs are different it will yield 1. 
+ //when x and y are both positive but add is negative, or when x and y are both negative but add is positive, o will
+ //yield 1. Therefore, if add xor x and add xor y's msb is 1, this means it overflowed and because o
+ // copies the msb 1 when shifting, the 32 bit integer will be full of 1's. 
+ //for the return statement, if o is overflowed, if add is negative then it will return the positive max value
+ //and if it is positive it will return the negative min value. if o is 0,  there is no overflowing so it will
+  //just return the add value. (if o is 0, o and 31 yields 0 so the original add + (o right shift 31) yield 0 vector 
+ //so it returns the add value. 
     int add = x+y;
     int o=((add^x)&(add^y))>>31;
     return (add>>(o & 31)) + (o <<31);
@@ -363,10 +447,12 @@ int satAdd(int x, int y) {
  *   Rating: 2
  */
 unsigned float_abs(unsigned uf) {
-  unsigned m = 0x7FFFFFFF; 
-  unsigned n = 0x7F800001; 
+ // set sign bit to 0 with mask AND uf variable
+	// return argument if it is NaN, all NaN >= minimum NaN 
+  unsigned m = 0x7FFFFFFF; //check NaN
+  unsigned n = 0x7F800001; //set sign bit to 0
   unsigned ans = uf & m;   
-  if (ans >= n)
+  if (ans >= n)//check if Nan
     return uf;
   return ans;
 }
